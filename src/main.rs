@@ -166,6 +166,14 @@ impl Game {
                         .map(|x| x.unwrap()),
         };
 
+        // // Check all moves for if a potential ally piece resides
+        // for i in 0..moves.len() {
+        //     if self.board[moves[i]].is_some() &&
+        //     self.board[moves[i]].unwrap().color == self.board[moves[index]].unwrap().color {
+        //         moves.remove(i);
+        //     }
+        // }
+
         Some(moves)
     }
 
@@ -174,21 +182,19 @@ impl Game {
         let rel_pos = pos as i32 + dy * 8 + dx;
     
         let different_row: bool = rel_pos / 8 != (pos as i32 + dy * 8) / 8;
-        if rel_pos < 0 || different_row || rel_pos > 63 || 
-        self.board[rel_pos as usize].unwrap().color != self.board[pos].unwrap().color {
+        let same_color: bool = self.board[rel_pos as usize].unwrap().color == self.board[pos].unwrap().color;
+
+        if rel_pos < 0 || rel_pos > 63 || different_row || same_color {
             None
         }
+
         Some(rel_pos as usize)
     }
     
-    fn rook_moves(start: usize) -> Vec<usize> {
-        let mut moves: Vec<usize> = Vec::new();
-        
-        // March in every direction and stop when it hits a piece
-
-        // Up
+    /// Marches with a leap size, adds position to Vec and stops when it hits a piece
+    fn march(start: usize, leap: i32, moves: &mut Vec<usize>) -> Vec<usize> {        
         for i in 0..7 {
-            let index: usize = start + -8 * i;
+            let index: usize = start + leap * i;
             if self.board[index].is_some() {
                 if self.board[index].unwrap().color != self.board[start].unwrap().color { // Other piece has same color
                     moves.push(index);
@@ -197,12 +203,26 @@ impl Game {
             }
             moves.push(index);
         }
-        
+    }
+
+    fn rook_moves(start: usize) -> Vec<usize> {
+        let mut moves: Vec<usize> = Vec::new();        
+        march(-8, moves); // Up
+        march(8, moves); // Down
+        march(-1, moves); // Left
+        march(1, moves); // Right
+
         moves
     }
 
     fn bishop_moves(start: usize) -> Vec<usize> {
-        
+        let mut moves: Vec<usize> = Vec::new();
+        march(-9, moves); // Up left
+        march(-7, moves); // Up right
+        march(7, moves); // Down left
+        march(9, moves); // Down right
+
+        moves
     }
 }
 
