@@ -13,7 +13,7 @@ pub enum Color {
     Black,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum PieceType {
     Pawn,
     Rook,
@@ -81,18 +81,18 @@ impl Game {
     /// If the current game state is InProgress and the move is legal,
     /// move a piece and return the resulting state of the game.
     pub fn make_move(&mut self, from: String, to: String) -> Option<GameState> {
-        let possible_moves: Vec<String> = match self.get_possible_moves(from) {
+        let possible_moves: Vec<String> = match self.get_possible_moves(&from) {
             Some(i) => i,
             None => return None,
         };
 
         if !possible_moves.contains(&to) {
             // Move is illegal
-            None
+            return None;
         }
 
-        let old_index = AN_to_index(from);
-        let new_index = AN_to_index(to);
+        let old_index = AN_to_index(&from);
+        let new_index = AN_to_index(&to);
 
         let mut state: GameState = GameState::InProgress;
 
@@ -104,8 +104,12 @@ impl Game {
 
         // Todo: check for GameState::Check
 
+        // Move piece
         self.board[new_index] = self.board[old_index];
         self.board[old_index] = None;
+
+        // Switch turn
+        self.active_color = if self.active_color == Color::White { Color::Black } else { Color::White };
 
         Some(state)
     }
@@ -124,7 +128,7 @@ impl Game {
     /// new positions of that piece. Don't forget to the rules for check.
     ///
     /// (optional) Don't forget to include en passent and castling.
-    pub fn get_possible_moves(&self, position: String) -> Option<Vec<String>> {
+    pub fn get_possible_moves(&self, position: &String) -> Option<Vec<String>> {
         use PieceType::*;
         let index: usize = AN_to_index(position);
         let piece = match self.board[index] {
@@ -139,32 +143,33 @@ impl Game {
         let bishop_moves = self.bishop_moves(index);
 
         // List all theoretically possible moves
-        let mut moves: Vec<usize> = match piece.pieceType {
-            Pawn => if piece.color == Color::White {
-                vec![rel_pos(index, 0, -1), rel_pos(index, 0, -2)]
+        let mut option_moves: Vec<Option<usize>> = match piece.pieceType {
+            Pawn => if self.active_color == Color::White {
+                vec![self.rel_pos(index, 0, -1), self.rel_pos(index, 0, -2)]
             } else {
-                vec![rel_pos(index, 0, 1), rel_pos(index, 0, 2)]
-            }
-            .retain(|x| x.is_some())
-            .map(|x| x.unwrap()),
+                vec![self.rel_pos(index, 0, 1), self.rel_pos(index, 0, 2)]
+            },
             Rook => rook_moves,
-            Knight => vec![rel_pos(index, -1, -2), rel_pos(index, 1, -2), // #1#1#
-                           rel_pos(index, -2, -1), rel_pos(index, 2, -1), // 1###1
-                                                                          // ##X##    (Knight moves)
-                           rel_pos(index, -2, 1), rel_pos(index, 2, 1),   // 1###1
-                           rel_pos(index, -1, 2), rel_pos(index, 1, 2),   // #1#1#
-                        ]
-                        .retain(|x| x.is_some())
-                        .map(|x| x.unwrap()),
+            Knight => vec![ self.rel_pos(index, -1, -2), self.rel_pos(index, 1, -2),// #1#1#
+                            self.rel_pos(index, -2, -1), self.rel_pos(index, 2, -1),// 1###1
+                                                                                    // ##X##    (Knight moves)
+                            self.rel_pos(index, -2, 1), self.rel_pos(index, 2, 1),  // 1###1
+                            self.rel_pos(index, -1, 2), self.rel_pos(index, 1, 2),  // #1#1#
+                        ],
             Bishop => bishop_moves,
-            Queen => vec![rook_moves, bishop_moves].into_iter().flatten().collect(),
-            King => vec![rel_pos(index, -1, -1), rel_pos(index, 0, -1), rel_pos(index, 1, -1),
-                         rel_pos(index, -1, 0),                         rel_pos(index, 1, 0),
-                         rel_pos(index, -1, 1),  rel_pos(index, 0, 1),  rel_pos(index, 1, 1),
-                        ]
-                        .retain(|x| x.is_some())
-                        .map(|x| x.unwrap()),
+            Queen => [rook_moves, bishop_moves].concat(),
+            King => vec![self.rel_pos(index, -1, -1), self.rel_pos(index, 0, -1), self.rel_pos(index, 1, -1),
+                        self.rel_pos(index, -1, 0),                               self.rel_pos(index, 1, 0),
+                        self.rel_pos(index, -1, 1),  self.rel_pos(index, 0, 1), self.rel_pos(index, 1, 1),
+                        ],
         };
+
+        // Remove all None
+        option_moves.retain(|x| x.is_some());
+        // New Vec of positions with algebraic notation (Strings)
+        let moves = option_moves.iter()
+            .map(|x| index_to_AN(x.unwrap()))
+            .collect();
 
         // // Check all moves for if a potential ally piece resides
         // for i in 0..moves.len() {
@@ -178,49 +183,49 @@ impl Game {
     }
 
     /// Returns relative index position to pos with difference in x (dx) and difference in y (dy)
-    fn rel_pos(pos: usize, dx: i32, dy: i32) -> Option<usize> {
+    fn rel_pos(&self, pos: usize, dx: i32, dy: i32) -> Option<usize> {
         let rel_pos = pos as i32 + dy * 8 + dx;
     
         let different_row: bool = rel_pos / 8 != (pos as i32 + dy * 8) / 8;
-        let same_color: bool = self.board[rel_pos as usize].unwrap().color == self.board[pos].unwrap().color;
+        let same_color: bool = self.board[rel_pos as usize].unwrap().color == self.active_color;
 
         if rel_pos < 0 || rel_pos > 63 || different_row || same_color {
-            None
+            return None;
         }
 
         Some(rel_pos as usize)
     }
     
     /// Marches with a leap size, adds position to Vec and stops when it hits a piece
-    fn march(start: usize, leap: i32, moves: &mut Vec<usize>) -> Vec<usize> {        
+    fn march(&self, start: usize, leap: i32, moves: &mut Vec<Option<usize>>) {        
         for i in 0..7 {
-            let index: usize = start + leap * i;
+            let index: usize = (start as i32 + leap * i) as usize;
             if self.board[index].is_some() {
-                if self.board[index].unwrap().color != self.board[start].unwrap().color { // Other piece has same color
-                    moves.push(index);
+                if self.board[index].unwrap().color != self.active_color { // Other piece has same color
+                    moves.push(Some(index));
                 }
                 break;
             }
-            moves.push(index);
+            moves.push(Some(index));
         }
     }
 
-    fn rook_moves(start: usize) -> Vec<usize> {
-        let mut moves: Vec<usize> = Vec::new();        
-        march(-8, moves); // Up
-        march(8, moves); // Down
-        march(-1, moves); // Left
-        march(1, moves); // Right
+    fn rook_moves(&self, start: usize) -> Vec<Option<usize>> {
+        let mut moves: Vec<Option<usize>> = Vec::new();        
+        self.march(start, -8, &mut moves); // Up
+        self.march(start, 8, &mut moves); // Down
+        self.march(start, -1, &mut moves); // Left
+        self.march(start, 1, &mut moves); // Right
 
         moves
     }
 
-    fn bishop_moves(start: usize) -> Vec<usize> {
-        let mut moves: Vec<usize> = Vec::new();
-        march(-9, moves); // Up left
-        march(-7, moves); // Up right
-        march(7, moves); // Down left
-        march(9, moves); // Down right
+    fn bishop_moves(&self, start: usize) -> Vec<Option<usize>> {
+        let mut moves: Vec<Option<usize>> = Vec::new();
+        self.march(start, -9, &mut moves); // Up left
+        self.march(start, -7, &mut moves); // Up right
+        self.march(start, 7, &mut moves); // Down left
+        self.march(start, 9, &mut moves); // Down right
 
         moves
     }
@@ -242,12 +247,17 @@ impl Game {
 impl fmt::Debug for Game {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         /* build board representation string */
-        let mut s: String = String::from("|:------------------------:|\n");
+        let mut s: String = String::from("|:--------------------------------:|\n");
 
         for piece in self.board.iter() {
             if piece.is_none() {
-                s.push_str("*  ");
+                s.push_str("*   ");
             } else {
+                match piece.unwrap().color {
+                    Color::Black => s.push_str("b"),
+                    Color::White => s.push_str("w"),
+                }
+
                 match piece.unwrap().pieceType {
                     PieceType::Pawn => s.push_str("P  "),
                     PieceType::Rook => s.push_str("R  "),
@@ -265,14 +275,14 @@ impl fmt::Debug for Game {
             }
         }
 
-        s.push_str("|:------------------------:|");
+        s.push_str("|:--------------------------------:|");
         
         write!(f, "{}", s)
     }
 }
 
 /// Returns index in game board based on position input using algebraic notation, AN (Ex. B4)
-fn AN_to_index(position: String) -> usize {
+fn AN_to_index(position: &String) -> usize {
     let lowercase = position.to_lowercase();
     let mut chars = lowercase.chars();
 
@@ -338,7 +348,6 @@ mod tests {
 
     #[test]
     fn AN_index_conversion() {
-        assert_eq!(AN_to_index(index_to_AN(32)), 32);
-        assert_eq!(index_to_AN(AN_to_index(String::from("A5"))), String::from("A5"));
+        assert_eq!(index_to_AN(32), String::from("A5"));
     }
 }
