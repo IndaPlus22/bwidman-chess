@@ -31,7 +31,7 @@ pub enum PieceType {
 #[derive(Copy, Clone)]
  pub struct Piece {
     color: Color,
-    pieceType: PieceType,
+    piece_type: PieceType,
 }
 
 pub struct Game {
@@ -47,19 +47,19 @@ impl Game {
         use Color::*;
         use PieceType::*;
 
-        let w_pawn = Some(Piece { color: White, pieceType: Pawn });
-        let w_rook = Some(Piece { color: White, pieceType: Rook });
-        let w_knight = Some(Piece { color: White, pieceType: Knight });
-        let w_bishop = Some(Piece { color: White, pieceType: Bishop });
-        let w_queen = Some(Piece { color: White, pieceType: Queen });
-        let w_king = Some(Piece { color: White, pieceType: King });
+        let w_pawn = Some(Piece { color: White, piece_type: Pawn });
+        let w_rook = Some(Piece { color: White, piece_type: Rook });
+        let w_knight = Some(Piece { color: White, piece_type: Knight });
+        let w_bishop = Some(Piece { color: White, piece_type: Bishop });
+        let w_queen = Some(Piece { color: White, piece_type: Queen });
+        let w_king = Some(Piece { color: White, piece_type: King });
 
-        let b_pawn = Some(Piece { color: Black, pieceType: Pawn });
-        let b_rook = Some(Piece { color: Black, pieceType: Rook });
-        let b_knight = Some(Piece { color: Black, pieceType: Knight });
-        let b_bishop = Some(Piece { color: Black, pieceType: Bishop });
-        let b_queen = Some(Piece { color: Black, pieceType: Queen });
-        let b_king = Some(Piece { color: Black, pieceType: King });
+        let b_pawn = Some(Piece { color: Black, piece_type: Pawn });
+        let b_rook = Some(Piece { color: Black, piece_type: Rook });
+        let b_knight = Some(Piece { color: Black, piece_type: Knight });
+        let b_bishop = Some(Piece { color: Black, piece_type: Bishop });
+        let b_queen = Some(Piece { color: Black, piece_type: Queen });
+        let b_king = Some(Piece { color: Black, piece_type: King });
 
         Game {
             /* initialise board, set active colour to white, ... */
@@ -91,14 +91,14 @@ impl Game {
             return None;
         }
 
-        let old_index = AN_to_index(&from);
-        let new_index = AN_to_index(&to);
+        let old_index = an_to_index(&from);
+        let new_index = an_to_index(&to);
 
         let mut state: GameState = GameState::InProgress;
 
         // We know that the move is legal, the other potential piece must be the other color
         if self.board[new_index].is_some() && 
-        self.board[new_index].unwrap().pieceType == PieceType::King {
+        self.board[new_index].unwrap().piece_type == PieceType::King {
             state = GameState::GameOver;
         }
 
@@ -130,7 +130,7 @@ impl Game {
     /// (optional) Don't forget to include en passent and castling.
     pub fn get_possible_moves(&self, position: &String) -> Option<Vec<String>> {
         use PieceType::*;
-        let index: usize = AN_to_index(position);
+        let index: usize = an_to_index(position);
         let piece = match self.board[index] {
             Some(i) => i,
             None => return None,
@@ -143,7 +143,7 @@ impl Game {
         let bishop_moves = self.bishop_moves(index);
 
         // List all theoretically possible moves
-        let mut option_moves: Vec<Option<usize>> = match piece.pieceType {
+        let mut option_moves: Vec<Option<usize>> = match piece.piece_type {
             Pawn => if self.active_color == Color::White {
                 vec![self.rel_pos(index, 0, -1), self.rel_pos(index, 0, -2)]
             } else {
@@ -168,7 +168,7 @@ impl Game {
         option_moves.retain(|x| x.is_some());
         // New Vec of positions with algebraic notation (Strings)
         let moves = option_moves.iter()
-            .map(|x| index_to_AN(x.unwrap()))
+            .map(|x| index_to_an(x.unwrap()))
             .collect();
 
         // // Check all moves for if a potential ally piece resides
@@ -258,7 +258,7 @@ impl fmt::Debug for Game {
                     Color::White => s.push_str("w"),
                 }
 
-                match piece.unwrap().pieceType {
+                match piece.unwrap().piece_type {
                     PieceType::Pawn => s.push_str("P  "),
                     PieceType::Rook => s.push_str("R  "),
                     PieceType::Knight => s.push_str("Kn "),
@@ -282,10 +282,9 @@ impl fmt::Debug for Game {
 }
 
 /// Returns index in game board based on position input using algebraic notation, AN (Ex. B4)
-fn AN_to_index(position: &String) -> usize {
+fn an_to_index(position: &String) -> usize {
     let lowercase = position.to_lowercase();
     let mut chars = lowercase.chars();
-
     let column: usize = match chars.next().unwrap() {
         'a' => 0,
         'b' => 1,
@@ -297,13 +296,13 @@ fn AN_to_index(position: &String) -> usize {
         'h' => 7,
         _ => todo!(),
     };
-    let row: usize = chars.next().unwrap() as usize - 1;
+    let row: usize = chars.next().unwrap().to_digit(10).unwrap() as usize - 1;
     
     row * 8 + column
 }
 
-/// Returns position on game board in algebraic notation based on index
-fn index_to_AN(position: usize) -> String {
+/// Returns position on game board in algebraic notation (AN) based on index
+fn index_to_an(position: usize) -> String {
     let column = match position % 8 {
         0 => "A",
         1 => "B",
@@ -347,7 +346,8 @@ mod tests {
     }
 
     #[test]
-    fn AN_index_conversion() {
-        assert_eq!(index_to_AN(32), String::from("A5"));
+    fn an_index_conversion() {
+        assert_eq!(index_to_an(32), String::from("A5"));
+        assert_eq!(an_to_index(&String::from("A5")), 32);
     }
 }
