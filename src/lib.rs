@@ -88,41 +88,73 @@ impl Game {
                 return None;
             },
         };
+
+        let old_index = an_to_index(&from);
+        let new_index = an_to_index(&to);
         
         // Player is trying to move an enemy piece
-        if self.board[an_to_index(&from)].unwrap().color != self.active_color {
+        if self.board[old_index].unwrap().color != self.active_color {
             println!("Cannot move enemy piece!");
             return None;
         }
 
+        // If the suggested move isn't in the list of possible ones, it's illegal
         if !possible_moves.contains(&to) {
             println!("That move is illegal!");
             return None;
         }
 
-        let old_index = an_to_index(&from);
-        let new_index = an_to_index(&to);
-
-        let mut state: GameState = GameState::InProgress;
+        let mut new_state: GameState = GameState::InProgress;
 
         // We know that the move is legal, the other potential piece must be the other color
         if self.board[new_index].is_some() && 
         self.board[new_index].unwrap().piece_type == PieceType::King {
-            state = GameState::GameOver;
+            new_state = GameState::GameOver;
         }
-
-        // Todo: check for GameState::Check
-
+        
         // Move piece
         self.board[new_index] = self.board[old_index];
         self.board[old_index] = None;
 
+        // Check for GameState::Check on own king if you make the move
+        // Check on every enemy piece to see if they can attack own king, if so the move is illegal
+        // However, if gamestate is already in check player is free to move (no checkmate implementation)
+        if self.state != GameState::Check {
+            for i in 0..64 as usize {
+                if self.board[i].is_some() && self.board[i].unwrap().color != self.active_color {
+                    let enemy_possible_moves = self.get_possible_moves(&index_to_an(i)).unwrap(); // We know there is a piece, safe to unwrap
+                    
+                    for possible_move in enemy_possible_moves {
+                        let possible_index = an_to_index(&possible_move);
+                        if self.board[possible_index].is_some() && self.board[possible_index].unwrap().piece_type == PieceType::King {
+                            // Move back piece
+                            self.board[old_index] = self.board[new_index];
+                            self.board[new_index] = None;
+                            println!("That move will result in check!");
+                            return None;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check for GameState::Check on enemy
+        let new_possible_moves = self.get_possible_moves(&to).unwrap(); // We know we just moved a piece there, safe to unwrap
+        // Loop through all new possible moves and check if any of them contains a king, it's the enemy since it's legal
+        for new_move in new_possible_moves {
+            let new_move_index = an_to_index(&new_move);
+            if self.board[new_move_index].is_some() &&
+            self.board[new_move_index].unwrap().piece_type == PieceType::King {
+                new_state = GameState::Check;
+            }
+        }
+        
         // Switch turn
         self.active_color = if self.active_color == Color::White { Color::Black } else { Color::White };
 
         println!("{:?}", self);
-
-        Some(state)
+        self.state = new_state;
+        Some(new_state)
     }
 
     /// Set the piece type that a peasant becomes following a promotion.
@@ -142,6 +174,7 @@ impl Game {
     /// new positions of that piece. Don't forget to the rules for check.
     ///
     /// (optional) Don't forget to include en passent and castling.
+    /// None if there is no piece.
     pub fn get_possible_moves(&self, position: &String) -> Option<Vec<String>> {
         let index: usize = an_to_index(position);
         let piece = match self.board[index] {
@@ -157,18 +190,20 @@ impl Game {
         let mut option_moves: Vec<Option<usize>> = match piece.piece_type {
             Pawn => self.pawn_moves(index),
             Rook => rook_moves,
-            Knight => vec![ self.rel_pos(index, -1, -2), self.rel_pos(index, 1, -2),// #1#1#
-                            self.rel_pos(index, -2, -1), self.rel_pos(index, 2, -1),// 1###1
-                                                                                    // ##X##    (Knight moves)
-                            self.rel_pos(index, -2, 1), self.rel_pos(index, 2, 1),  // 1###1
-                            self.rel_pos(index, -1, 2), self.rel_pos(index, 1, 2),  // #1#1#
-                        ],
+            Knight => vec![ 
+                self.rel_pos(index, -1, -2), self.rel_pos(index, 1, -2),// #1#1#
+                self.rel_pos(index, -2, -1), self.rel_pos(index, 2, -1),// 1###1
+                                                                        // ##X##    (Knight moves)
+                self.rel_pos(index, -2, 1), self.rel_pos(index, 2, 1),  // 1###1
+                self.rel_pos(index, -1, 2), self.rel_pos(index, 1, 2),  // #1#1#
+            ],
             Bishop => bishop_moves,
             Queen => [rook_moves, bishop_moves].concat(),
-            King => vec![self.rel_pos(index, -1, -1), self.rel_pos(index, 0, -1), self.rel_pos(index, 1, -1),
-                        self.rel_pos(index, -1, 0),                               self.rel_pos(index, 1, 0),
-                        self.rel_pos(index, -1, 1),  self.rel_pos(index, 0, 1), self.rel_pos(index, 1, 1),
-                        ],
+            King => vec![
+                self.rel_pos(index, -1, -1), self.rel_pos(index, 0, -1), self.rel_pos(index, 1, -1),
+                self.rel_pos(index, -1, 0),                               self.rel_pos(index, 1, 0),
+                self.rel_pos(index, -1, 1),  self.rel_pos(index, 0, 1), self.rel_pos(index, 1, 1),
+            ],
         };
 
         // Remove all None
@@ -190,7 +225,7 @@ impl Game {
         let different_row: bool = rel_pos / 8 != (pos as i32 + dy * 8) / 8;
         let outside_bounds: bool = rel_pos < 0 || rel_pos > 63;
         let same_color: bool = !outside_bounds && self.board[rel_pos as usize].is_some() &&
-            self.board[rel_pos as usize].unwrap().color == self.active_color;
+            self.board[rel_pos as usize].unwrap().color == self.board[pos].unwrap().color;
 
         if outside_bounds || different_row || same_color {
             return None;
@@ -238,7 +273,8 @@ impl Game {
     fn pawn_moves(&self, start: usize) -> Vec<Option<usize>> {
         let mut moves: Vec<Option<usize>> = Vec::new();
 
-        let direction: i32 = if self.active_color == Color::White { -1 } else { 1 };
+        let pawn_color = self.board[start].unwrap().color;
+        let direction: i32 = if pawn_color == Color::White { -1 } else { 1 };
 
         // One step forward
         moves.push(self.rel_pos(start, 0, direction));
@@ -255,14 +291,14 @@ impl Game {
         // There is a piece diagonally to the left and it's an enemy
         if left_attack.is_some() && 
         self.board[left_attack.unwrap()].is_some() &&
-        self.board[left_attack.unwrap()].unwrap().color != self.active_color {
+        self.board[left_attack.unwrap()].unwrap().color != pawn_color {
             moves.push(left_attack);
         }
 
         // There is a piece diagonally to the right and it's an enemy
         if right_attack.is_some() && 
         self.board[right_attack.unwrap()].is_some() &&
-        self.board[right_attack.unwrap()].unwrap().color != self.active_color {
+        self.board[right_attack.unwrap()].unwrap().color != pawn_color {
             moves.push(right_attack);
         }
 
@@ -430,8 +466,11 @@ mod tests {
         game.set_promotion(String::from("B1"), PieceType::Queen);
 
         assert_eq!(game.make_move(String::from("C1"), String::from("E3")), None); // Black queen cannot move through pawn
-        assert_eq!(game.make_move(String::from("C1"), String::from("B2")), Some(GameState::InProgress)); // Escape
-        assert_eq!(game.make_move(String::from("B1"), String::from("D1")), Some(GameState::GameOver)); // Kill black king
+        assert_eq!(game.make_move(String::from("C1"), String::from("B2")), None); // Queen, cannot escape since it causes check
+        assert_eq!(game.make_move(String::from("F2"), String::from("F3")), Some(GameState::InProgress)); // Idly black pawn forward
+        assert_eq!(game.make_move(String::from("B1"), String::from("C1")), Some(GameState::Check)); // Kill black queen
+        assert_eq!(game.make_move(String::from("F3"), String::from("F4")), Some(GameState::InProgress)); // Idly black pawn forward
+        assert_eq!(game.make_move(String::from("C1"), String::from("D1")), Some(GameState::GameOver)); // Kill black king
         // Game over
     }
 }
