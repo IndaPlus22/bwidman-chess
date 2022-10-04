@@ -7,13 +7,13 @@ pub enum GameState {
     GameOver,
 }
 
-#[derive(PartialEq, Copy, Clone)]
+#[derive(PartialEq, Copy, Clone, Eq, std::hash::Hash)]
 pub enum Color {
     White,
     Black,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, std::hash::Hash)]
 pub enum PieceType {
     Pawn,
     Rook,
