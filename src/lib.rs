@@ -285,12 +285,17 @@ impl Game {
         let direction: i32 = if pawn_color == Color::White { -1 } else { 1 };
 
         // One step forward
-        moves.push(self.rel_pos(start, 0, direction));
+        let one_step = self.rel_pos(start, 0, direction);
+        if one_step.is_some() && self.board[one_step.unwrap()].is_none() { // Cannot attack forward
+            moves.push(one_step);
+        }
 
         // Start position for black or white pawns, two steps forward
-        if start / 8 == 1 && direction == 1 ||
-        start / 8 == 6 && direction == -1 {
-            moves.push(self.rel_pos(start, 0, 2 * direction));
+        let two_steps = self.rel_pos(start, 0, 2 * direction);
+        if (start / 8 == 1 && direction == 1 ||
+        start / 8 == 6 && direction == -1) &&
+        two_steps.is_some() && self.board[two_steps.unwrap()].is_none() { // Cannot attack forward
+            moves.push(two_steps);
         }
 
         let left_attack = self.rel_pos(start, -1, direction);
@@ -463,22 +468,23 @@ mod tests {
         assert_eq!(game.make_move(String::from("B4"), String::from("B3")), Some(GameState::InProgress)); // White pawn forward
 
         // Queen
-        assert_eq!(game.make_move(String::from("D1"), String::from("C1")), Some(GameState::InProgress));
+        assert_eq!(game.make_move(String::from("D1"), String::from("B1")), Some(GameState::InProgress));
         assert_eq!(game.make_move(String::from("B3"), String::from("B2")), Some(GameState::InProgress)); // White pawn forward
         
         // King
         assert_eq!(game.make_move(String::from("E1"), String::from("D1")), Some(GameState::InProgress));
-        assert_eq!(game.make_move(String::from("B2"), String::from("B1")), Some(GameState::InProgress)); // White pawn forward
+        assert_eq!(game.make_move(String::from("B2"), String::from("B1")), None); // Pawn cannot attack forward
+        assert_eq!(game.make_move(String::from("B2"), String::from("A1")), Some(GameState::InProgress)); // Pawn attacks rook
 
         // Promote pawn
-        game.set_promotion(String::from("B1"), PieceType::Queen);
+        game.set_promotion(String::from("A1"), PieceType::Queen);
 
-        assert_eq!(game.make_move(String::from("C1"), String::from("E3")), None); // Black queen cannot move through pawn
-        assert_eq!(game.make_move(String::from("C1"), String::from("B2")), None); // Queen, cannot escape since it causes check
+        assert_eq!(game.make_move(String::from("B1"), String::from("D3")), None); // Black queen cannot move through pawn
+        assert_eq!(game.make_move(String::from("B1"), String::from("B2")), None); // Queen, cannot escape since it causes check
         assert_eq!(game.make_move(String::from("F2"), String::from("F3")), Some(GameState::InProgress)); // Idly black pawn forward
-        assert_eq!(game.make_move(String::from("B1"), String::from("C1")), Some(GameState::Check)); // Kill black queen
+        assert_eq!(game.make_move(String::from("A1"), String::from("B1")), Some(GameState::Check)); // Kill black queen
         assert_eq!(game.make_move(String::from("F3"), String::from("F4")), Some(GameState::InProgress)); // Idly black pawn forward
-        assert_eq!(game.make_move(String::from("C1"), String::from("D1")), Some(GameState::GameOver)); // Kill black king
+        assert_eq!(game.make_move(String::from("B1"), String::from("D1")), Some(GameState::GameOver)); // Kill black king
         // Game over
     }
 }
