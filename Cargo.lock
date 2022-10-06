@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "chess-template"
+name = "chess_template"
 version = "0.1.0"

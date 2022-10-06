@@ -30,8 +30,8 @@ pub enum PieceType {
 
 #[derive(Copy, Clone)]
  pub struct Piece {
-    color: Color,
-    piece_type: PieceType,
+    pub color: Color,
+    pub piece_type: PieceType,
 }
 
 pub struct Game {
@@ -76,6 +76,14 @@ impl Game {
                 w_rook, w_knight, w_bishop, w_queen, w_king, w_bishop, w_knight, w_rook,
             ],
         }
+    }
+
+    pub fn get_board(&self) -> &[Option<Piece>; 64] {
+        &self.board
+    }
+
+    pub fn get_active_color(&self) -> Color {
+        self.active_color
     }
 
     /// If the current game state is InProgress and the move is legal,
@@ -359,7 +367,7 @@ impl fmt::Debug for Game {
 }
 
 /// Returns index in game board based on position input using algebraic notation, AN (Ex. B4)
-fn an_to_index(position: &String) -> usize {
+pub fn an_to_index(position: &String) -> usize {
     let lowercase = position.to_lowercase();
     let mut chars = lowercase.chars();
     let column: usize = match chars.next().unwrap() {
@@ -379,7 +387,7 @@ fn an_to_index(position: &String) -> usize {
 }
 
 /// Returns position on game board in algebraic notation (AN) based on index
-fn index_to_an(position: usize) -> String {
+pub fn index_to_an(position: usize) -> String {
     let column = match position % 8 {
         0 => "A",
         1 => "B",
